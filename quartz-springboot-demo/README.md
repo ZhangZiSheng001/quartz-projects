@@ -1,10 +1,11 @@
 
-# quartz-spring-demo
+# quartz-springboot-demo
 
 ## 简介    
 `quartz`可以用来实现任务的定时执行，支持将`JobDetail`和`Trigger`存入数据库，且能够再程序重启后从数据库中恢复定时任务。  
 
 使用`quartz`需要注意几个重要的组件：  
+
 1. **Job**  
 需要执行的具体内容。  
 
@@ -25,7 +26,7 @@
 数据保存方式。常用的：`RAMJobStore`（内存方式）和`JobStoreTX`（JDBC方式）。
 
 ## 需求
-测试`Spring`整合`quartz`采用不同存储方式(`RAM`和`JDBC`)执行定时任务，并且测试从数据库中恢复定时任务。  
+测试`SpringBoot`整合`quartz`采用不同存储方式(`RAM`和`JDBC`)执行定时任务，并且测试从数据库中恢复定时任务。  
 
 ## 工程环境
 JDK：1.8.0_201  
@@ -50,7 +51,7 @@ Spring：5.1.9.RELEASE
  
 4. 配置`Scheduler`，将`Trigger`绑定到这个调度容器里；  
  
-5. 启动`Spring加载配置`，任务自动执行。  
+5. 启动`SpringBoot加载配置`，任务自动执行。  
 
 
 ## 创建表
@@ -62,55 +63,83 @@ Spring：5.1.9.RELEASE
 项目类型`Maven Project`，打包方式`jar`  
 
 ## 引入依赖
-`quartz`默认已经依赖了`c3p0`连接池，这里就不需要再引入了。  
+这里补充一点，测试插件我配置了支持多线程，不然测试不了定时任务。  
 
 ```xml
-<!-- Spring -->
-<dependency>
-	<groupId>org.springframework</groupId>
-	<artifactId>spring-context-support</artifactId>
-	<version>5.1.9.RELEASE</version>
-</dependency>
-<dependency>
-	<groupId>org.springframework</groupId>
-	<artifactId>spring-tx</artifactId>
-	<version>5.1.9.RELEASE</version>
-</dependency>
-<dependency>
-    <groupId>org.springframework</groupId>
-    <artifactId>spring-jdbc</artifactId>
-    <version>5.1.9.RELEASE</version>
-</dependency>  
-<!-- quartz -->
-<dependency>
-	<groupId>org.quartz-scheduler</groupId>
-	<artifactId>quartz</artifactId>
-	<version>2.3.1</version>
-</dependency>
-<dependency>
-    <groupId>org.quartz-scheduler</groupId>
-    <artifactId>quartz-jobs</artifactId>
-    <version>2.3.1</version>
-</dependency>
-<!-- logback -->
-<dependency>
-	<groupId>ch.qos.logback</groupId>
-	<artifactId>logback-core</artifactId>
-	<version>1.2.3</version>
-	<type>jar</type>
-</dependency>
-<dependency>
-	<groupId>ch.qos.logback</groupId>
-	<artifactId>logback-classic</artifactId>
-	<version>1.2.3</version>
-	<type>jar</type>
-</dependency>
-<!-- 数据库驱动 -->
-<dependency>
-	<groupId>mysql</groupId>
-	<artifactId>mysql-connector-java</artifactId>
-	<version>8.0.17</version>
-</dependency>
+	<!-- Spring Boot启动器父类 -->
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>2.1.7.RELEASE</version>
+		<relativePath /> <!-- lookup parent from repository -->
+	</parent>
+
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+		<java.version>1.8</java.version>
+	</properties>
+
+	<dependencies>
+		<!-- quartz启动器 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-quartz</artifactId>
+		</dependency>
+		<!-- c3p0 -->
+		<dependency>
+			<groupId>com.mchange</groupId>
+			<artifactId>c3p0</artifactId>
+			<version>0.9.5.4</version>
+		</dependency>
+		<!-- 数据库驱动 -->
+		<dependency>
+			<groupId>mysql</groupId>
+			<artifactId>mysql-connector-java</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-configuration-processor</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-jdbc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+		</dependency>
+	</dependencies>
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+			<!-- 配置测试的插件 -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>2.20</version>
+				<configuration>
+					<!-- 可以采用多线程测试用例 -->
+					<parallel>methods</parallel>
+					<threadCount>10</threadCount>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+```
+
+## 编写application.properties
+RAM方式可以不用application.properties文件，JDBC方式也可以不用，但如果数据库还没有相关的表，可以配置如下参数：  
+
+```properties
+# 每次启动重新初始化数据库中Quartz相关的表，如果不需要每次启动服务都重新创建表，下面两项可以不配置，事先在数据库中创建好Quartz相关的表
+spring.quartz.jdbc.initialize-schema=always
+# 初始化脚本
+spring.quartz.jdbc.schema=classpath:schema/tables_mysql.sql
 ```
 
 ## 编写quartz.properties
@@ -168,8 +197,7 @@ public class MyJob extends QuartzJobBean {
 ```
 
 ## 编写配置类
-其实，采用xml和采用配置类是一样的，这里就不再给出xml的配置了。 
-我还是推荐使用Quartz原生的方法定义这几个Bean，而不是采用Spring的`FactoryBean`，相关Bean的创建可以参考[quartz-demo](https://github.com/ZhangZiSheng001/quartz-projects/tree/master/quartz-demo)   
+其实，我还是推荐使用Quartz原生的方法定义这几个Bean，而不是采用Spring的`FactoryBean`，相关Bean的创建可以参考[quartz-demo](https://github.com/ZhangZiSheng001/quartz-projects/tree/master/quartz-demo)   
 
 ### RAM配置类 
 ```java
@@ -330,23 +358,45 @@ public class JDBCResumeQuartzConfig {
 }
 ```
 
-## 编写测试类
-注意，这里不能用junit测试。  
+## 编写启动类
+这里利用注解排除加载不同的配置。  
+RAM和JDBC存储的可以直接在启动类运行。  
 
 ```java
-public class QuartzTest {
-	
-	@SuppressWarnings({"unused","resource"})
-	public static void main(String[] args) throws Exception {
-		//内存方式
-		//ApplicationContext applicationContext = new AnnotationConfigApplicationContext(RamQuartzConfig.class);
-		//JDBC方式
-		ApplicationContext applicationContext = new AnnotationConfigApplicationContext(JDBCQuartzConfig.class);
-		//测试从数据库中恢复任务
-		//ApplicationContext applicationContext = new AnnotationConfigApplicationContext(JDBCResumeQuartzConfig.class);
-		//resumeJob((Scheduler)applicationContext.getBean("jdbcResumeScheduler"));
+@SpringBootApplication
+//@ComponentScan(excludeFilters={@Filter(type=FilterType.ASSIGNABLE_TYPE, classes={JDBCQuartzConfig.class,JDBCResumeQuartzConfig.class})})
+//@ComponentScan(excludeFilters={@Filter(type=FilterType.ASSIGNABLE_TYPE, classes={RamQuartzConfig.class,JDBCResumeQuartzConfig.class})})
+//@ConfigurationProperties(value = "application-jdbc.properties")
+@ComponentScan(excludeFilters={@Filter(type=FilterType.ASSIGNABLE_TYPE, classes={JDBCQuartzConfig.class,RamQuartzConfig.class})})
+public class Application {
+	public static void main(String[] args) {
+		SpringApplication.run(Application.class, args);
 	}
-	
+}
+```
+JDBC从数据库恢复定时任务的话，我采用新建测试类来测试。  
+注意，这里不能直接使用junit测试。  
+应该使用maven test来运行。  
+
+```java
+/**
+ * @ClassName: QuartzTest
+ * @Description: 测试Spring整合Quartz
+ * @author: zzs
+ * @date: 2019年9月2日 上午8:07:45
+ */
+@RunWith(SpringJUnit4ClassRunner.class)
+@SpringBootTest(classes = { Application.class })
+public class QuartzTest {
+	@Autowired
+	private Scheduler scheduler;
+
+	@Test
+	public void testResumeJob() throws Exception {
+		resumeJob(scheduler);
+		Thread.sleep(100000);
+	}
+
 	/**
 	 * 
 	 * @Title: resumeJob
@@ -356,11 +406,11 @@ public class QuartzTest {
 	 * @return: void
 	 * @throws SchedulerException 
 	 */
-	public static void resumeJob(Scheduler scheduler) throws SchedulerException {
+	public void resumeJob(Scheduler scheduler) throws SchedulerException {
 		JobKey jobKey = new JobKey("jdbc jobDetail", "jdbc jobDetailGroup");
 		List<? extends Trigger> triggers = scheduler.getTriggersOfJob(jobKey);
 		// 重新恢复在firstGroup组中，名为firstJob的 job的触发器运行
-		if(triggers!=null){
+		if (triggers != null) {
 			for (Trigger tg : triggers) {
 				// 根据类型判断
 				if ((tg instanceof CronTrigger) || (tg instanceof SimpleTrigger)) {
@@ -371,6 +421,7 @@ public class QuartzTest {
 			scheduler.start();
 		}
 	}
+
 }
 ```
 
